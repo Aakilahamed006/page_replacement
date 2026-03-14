@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Page Replacement Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a25;
+    --border: #2a2a40;
+    --cyan: #00e5ff;
+    --green: #00ff9d;
+    --magenta: #ff2d78;
+    --yellow: #ffd600;
+    --blue: #4d79ff;
+    --text: #e8e8f0;
+    --dim: #666688;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0,229,255,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 90% 100%, rgba(77,121,255,0.06) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+
+  /* HEADER */
+  header { text-align: center; margin-bottom: 3rem; }
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(1.8rem, 5vw, 3.5rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--blue) 50%, var(--magenta) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+    margin-bottom: 0.5rem;
+  }
+  .subtitle {
+    color: var(--dim);
+    font-size: 0.8rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+  .algo-badges {
+    display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;
+    margin-top: 1rem;
+  }
+  .badge {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.15em;
+    padding: 0.3rem 0.8rem; border-radius: 100px;
+    border: 1px solid;
+    text-transform: uppercase;
+  }
+  .badge-fifo { color: var(--cyan); border-color: var(--cyan); }
+  .badge-lru  { color: var(--green); border-color: var(--green); }
+  .badge-lfu  { color: var(--magenta); border-color: var(--magenta); }
+  .badge-mfu  { color: var(--blue); border-color: var(--blue); }
+
+  /* PANEL */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .panel-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .panel-title::before { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .panel-title::after  { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* INPUTS */
+  .input-grid { display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: end; }
+  @media (max-width: 600px) { .input-grid { grid-template-columns: 1fr; } }
+
+  label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 1rem;
+    padding: 0.75rem 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type="text"]:focus, input[type="number"]:focus {
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 3px rgba(0,229,255,0.08);
+  }
+
+  .frame-group { display: flex; align-items: center; gap: 0.5rem; }
+  .frame-group input { width: 80px; }
+  .frame-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    width: 36px; height: 36px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .frame-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  .run-btn {
+    background: linear-gradient(135deg, var(--cyan), var(--blue));
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    padding: 0.75rem 2rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .run-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,229,255,0.3); }
+  .run-btn:active { transform: translateY(0); }
+
+  /* PRESETS */
+  .presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+  .preset-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--dim);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    padding: 0.3rem 0.6rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .preset-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+
+  /* ERROR */
+  .error {
+    color: var(--magenta);
+    font-size: 0.8rem;
+    margin-top: 0.4rem;
+    display: none;
+  }
+
+  /* RESULTS hidden by default */
+  #results { display: none; }
+
+  /* SUMMARY CARDS */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+  .card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s;
+  }
+  .card:hover { transform: translateY(-2px); }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .card-fifo::before { background: var(--cyan); }
+  .card-lru::before  { background: var(--green); }
+  .card-lfu::before  { background: var(--magenta); }
+  .card-mfu::before  { background: var(--blue); }
+
+  .card.best {
+    border-color: var(--green);
+    box-shadow: 0 0 20px rgba(0,255,157,0.1);
+  }
+  .card-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    margin-bottom: 0.75rem;
+  }
+  .card-fifo .card-name { color: var(--cyan); }
+  .card-lru  .card-name { color: var(--green); }
+  .card-lfu  .card-name { color: var(--magenta); }
+  .card-mfu  .card-name { color: var(--blue); }
+
+  .metric { display: flex; justify-content: space-between; margin-bottom: 0.3rem; }
+  .metric-label { color: var(--dim); font-size: 0.72rem; }
+  .metric-value { font-size: 0.85rem; font-weight: 700; }
+  .metric-faults { color: var(--magenta); }
+  .metric-hits   { color: var(--green); }
+  .metric-rate   { color: var(--yellow); }
+
+  .hit-bar-wrap { margin-top: 0.75rem; }
+  .hit-bar-bg { background: var(--border); border-radius: 100px; height: 6px; overflow: hidden; }
+  .hit-bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.8s cubic-bezier(.4,0,.2,1);
+  }
+  .bar-fifo { background: var(--cyan); }
+  .bar-lru  { background: var(--green); }
+  .bar-lfu  { background: var(--magenta); }
+  .bar-mfu  { background: var(--blue); }
+
+  .best-badge {
+    position: absolute; top: 0.75rem; right: 0.75rem;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em;
+    color: #000; background: var(--green);
+    padding: 0.15rem 0.5rem; border-radius: 100px;
+    text-transform: uppercase;
+  }
+
+  /* WINNER */
+  .winner-panel {
+    border: 1px solid var(--green);
+    border-radius: 12px;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, rgba(0,255,157,0.05) 0%, rgba(0,229,255,0.03) 100%);
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+  .winner-trophy { font-size: 2.5rem; margin-bottom: 0.5rem; }
+  .winner-title { font-family: 'Syne', sans-serif; font-size: 1.5rem; font-weight: 800; color: var(--green); }
+  .winner-stats { color: var(--dim); font-size: 0.8rem; margin-top: 0.25rem; }
+  .winner-advice {
+    margin-top: 1rem;
+    color: var(--yellow);
+    font-size: 0.82rem;
+    font-style: italic;
+    max-width: 600px;
+    margin-left: auto; margin-right: auto;
+    line-height: 1.6;
+  }
+
+  /* TRACE TABLE */
+  .trace-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .trace-tab {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--dim);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .trace-tab.active-fifo { border-color: var(--cyan); color: var(--cyan); }
+  .trace-tab.active-lru  { border-color: var(--green); color: var(--green); }
+  .trace-tab.active-lfu  { border-color: var(--magenta); color: var(--magenta); }
+  .trace-tab.active-mfu  { border-color: var(--blue); color: var(--blue); }
+
+  .trace-content { display: none; }
+  .trace-content.active { display: block; }
+
+  .trace-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .trace-table th {
+    text-align: left;
+    color: var(--dim);
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .trace-table td {
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .trace-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .frame-cell { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .frame-slot {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    min-width: 28px;
+    text-align: center;
+  }
+  .frame-slot.empty { color: var(--dim); border-style: dashed; }
+  .hit-cell   { color: var(--green); font-weight: 700; }
+  .miss-cell  { color: var(--magenta); font-weight: 700; }
+  .page-cell  { color: var(--yellow); font-weight: 700; }
+
+  .scroll-wrap { max-height: 400px; overflow-y: auto; border-radius: 8px; border: 1px solid var(--border); }
+  .scroll-wrap::-webkit-scrollbar { width: 4px; }
+  .scroll-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">Page Replacement<br>Analyzer</div>
+    <div class="subtitle">Memory Management Algorithm Simulator</div>
+    <div class="algo-badges">
+      <span class="badge badge-fifo">FIFO</span>
+      <span class="badge badge-lru">LRU</span>
+      <span class="badge badge-lfu">LFU</span>
+      <span class="badge badge-mfu">MFU</span>
+    </div>
+  </header>
+
+  <!-- INPUT PANEL -->
+  <div class="panel">
+    <div class="panel-title">Configuration</div>
+    <div class="input-grid">
+      <div>
+        <label>Reference String (space-separated integers)</label>
+        <input type="text" id="refStr" placeholder="e.g. 1 2 3 4 1 2 5 1 2 3 4 5" value="1 2 3 4 1 2 5 1 2 3 4 5" />
+        <div class="error" id="refError">Please enter valid space-separated integers.</div>
+        <div class="presets">
+          <span style="color:var(--dim); font-size:0.7rem; align-self:center;">Presets:</span>
+          <button class="preset-btn" onclick="setPreset('7 0 1 2 0 3 0 4 2 3 0 3 2')">Classic</button>
+          <button class="preset-btn" onclick="setPreset('1 2 3 4 2 1 5 6 2 1 2 3 7 6 3 2 1 2 3 6')">Long</button>
+          <button class="preset-btn" onclick="setPreset('1 1 1 2 2 2 3 3 3 1 1 1')">Locality</button>
+          <button class="preset-btn" onclick="setPreset('5 4 3 2 1 5 4 3 2 1')">Sequential</button>
+          <button class="preset-btn" onclick="setPreset('1 2 3 4 5 6 7 8 9 10')">No Repeat</button>
+        </div>
+      </div>
+      <div>
+        <label>Frame Capacity</label>
+        <div class="frame-group">
+          <button class="frame-btn" onclick="changeFrame(-1)">−</button>
+          <input type="number" id="frameCount" value="3" min="1" max="100" />
+          <button class="frame-btn" onclick="changeFrame(1)">+</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:1rem; display:flex; justify-content:flex-end;">
+      <button class="run-btn" onclick="runSimulation()">▶ Run Simulation</button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+
+    <!-- WINNER -->
+    <div class="winner-panel" id="winnerPanel"></div>
+
+    <!-- CARDS -->
+    <div class="panel">
+      <div class="panel-title">Algorithm Comparison</div>
+      <div class="cards" id="cards"></div>
+    </div>
+
+    <!-- TRACE -->
+    <div class="panel">
+      <div class="panel-title">Step-by-Step Trace</div>
+      <div class="trace-tabs" id="traceTabs"></div>
+      <div id="traceContents"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+// ─── Algorithm Implementations ───────────────────────────────────────────────
+
+function runFIFO(pages, cap) {
+  let frame = [], hits = 0, faults = 0, steps = [];
+  for (let page of pages) {
+    let hit = frame.includes(page);
+    if (hit) { hits++; }
+    else {
+      faults++;
+      if (frame.length < cap) frame.push(page);
+      else { frame.shift(); frame.push(page); }
+    }
+    steps.push({ page, frame: [...frame], hit });
+  }
+  return { hits, faults, steps };
+}
+
+function runLRU(pages, cap) {
+  let frame = [], hits = 0, faults = 0, steps = [];
+  for (let page of pages) {
+    let idx = frame.indexOf(page);
+    if (idx !== -1) {
+      hits++;
+      frame.splice(idx, 1); frame.push(page);
+    } else {
+      faults++;
+      if (frame.length === cap) frame.shift();
+      frame.push(page);
+    }
+    steps.push({ page, frame: [...frame], hit: idx !== -1 });
+  }
+  return { hits, faults, steps };
+}
+
+function runLFU(pages, cap) {
+  let frame = {}, freqOrder = {}, hits = 0, faults = 0, steps = [], order = 0;
+  for (let page of pages) {
+    if (page in frame) {
+      frame[page]++;
+      hits++;
+      steps.push({ page, frame: Object.keys(frame).map(Number), hit: true });
+    } else {
+      faults++;
+      if (Object.keys(frame).length === cap) {
+        let victim = Object.keys(frame).reduce((a, b) =>
+          frame[a] < frame[b] || (frame[a] === frame[b] && freqOrder[a] < freqOrder[b]) ? a : b);
+        delete frame[victim]; delete freqOrder[victim];
+      }
+      frame[page] = 1; freqOrder[page] = order++;
+      steps.push({ page, frame: Object.keys(frame).map(Number), hit: false });
+    }
+  }
+  return { hits, faults, steps };
+}
+
+function runMFU(pages, cap) {
+  let frame = {}, freqOrder = {}, hits = 0, faults = 0, steps = [], order = 0;
+  for (let page of pages) {
+    if (page in frame) {
+      frame[page]++;
+      hits++;
+      steps.push({ page, frame: Object.keys(frame).map(Number), hit: true });
+    } else {
+      faults++;
+      if (Object.keys(frame).length === cap) {
+        let victim = Object.keys(frame).reduce((a, b) =>
+          frame[a] > frame[b] || (frame[a] === frame[b] && freqOrder[a] < freqOrder[b]) ? a : b);
+        delete frame[victim]; delete freqOrder[victim];
+      }
+      frame[page] = 1; freqOrder[page] = order++;
+      steps.push({ page, frame: Object.keys(frame).map(Number), hit: false });
+    }
+  }
+  return { hits, faults, steps };
+}
+
+// ─── UI Helpers ──────────────────────────────────────────────────────────────
+
+const ALGOS = [
+  { name: 'FIFO', key: 'fifo', fn: runFIFO, color: '#00e5ff' },
+  { name: 'LRU',  key: 'lru',  fn: runLRU,  color: '#00ff9d' },
+  { name: 'LFU',  key: 'lfu',  fn: runLFU,  color: '#ff2d78' },
+  { name: 'MFU',  key: 'mfu',  fn: runMFU,  color: '#4d79ff' },
+];
+
+const ADVICE = {
+  FIFO: "FIFO is simple and predictable. It works well with sequential access patterns and has minimal overhead — great for simple embedded systems.",
+  LRU:  "LRU exploits temporal locality: recently used pages stay resident. It's the go-to choice for most real-world operating systems and caching layers.",
+  LFU:  "LFU shines when access frequencies vary widely. Frequently accessed pages are kept — ideal for caching popular web content or hot database records.",
+  MFU:  "MFU works counterintuitively by evicting the most-used pages, assuming popular pages have been fully utilized. Best for sequential batch processing."
+};
+
+function setPreset(str) { document.getElementById('refStr').value = str; }
+function changeFrame(delta) {
+  let el = document.getElementById('frameCount');
+  el.value = Math.max(1, Math.min(100, parseInt(el.value) + delta));
+}
+
+function runSimulation() {
+  const refStr = document.getElementById('refStr').value.trim();
+  const errEl = document.getElementById('refError');
+
+  const pages = refStr.split(/\s+/).map(Number);
+  if (!refStr || pages.some(isNaN) || pages.length === 0) {
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
+
+  const cap = parseInt(document.getElementById('frameCount').value);
+  const total = pages.length;
+
+  const results = {};
+  for (let { name, key, fn } of ALGOS) {
+    results[name] = fn(pages, cap);
+  }
+
+  // Sort by faults ascending
+  const ranked = [...ALGOS].sort((a, b) => results[a.name].faults - results[b.name].faults);
+  const minFaults = results[ranked[0].name].faults;
+  const winners = ranked.filter(a => results[a.name].faults === minFaults).map(a => a.name);
+
+  // Show results section
+  document.getElementById('results').style.display = 'block';
+
+  // WINNER PANEL
+  const wp = document.getElementById('winnerPanel');
+  const winnerName = winners.length > 1 ? winners.join(' & ') : winners[0];
+  const winnerData = results[ranked[0].name];
+  const hitRate = ((winnerData.hits / total) * 100).toFixed(1);
+  wp.innerHTML = `
+    <div class="winner-trophy">🏆</div>
+    <div class="winner-title">${winners.length > 1 ? 'TIE: ' : 'WINNER: '}${winnerName}</div>
+    <div class="winner-stats">${minFaults} page faults · ${hitRate}% hit rate · ${total} references · ${cap} frames</div>
+    <div class="winner-advice">💡 ${ADVICE[winners[0]]}</div>
+  `;
+
+  // CARDS
+  const cardsEl = document.getElementById('cards');
+  cardsEl.innerHTML = '';
+  for (let algo of ranked) {
+    const { name, key } = algo;
+    const { hits, faults } = results[name];
+    const hr = ((hits / total) * 100).toFixed(1);
+    const fr = ((faults / total) * 100).toFixed(1);
+    const isBest = faults === minFaults;
+    cardsEl.innerHTML += `
+      <div class="card card-${key}${isBest ? ' best' : ''}">
+        ${isBest ? '<div class="best-badge">Best</div>' : ''}
+        <div class="card-name">${name}</div>
+        <div class="metric"><span class="metric-label">Page Faults</span><span class="metric-value metric-faults">${faults}</span></div>
+        <div class="metric"><span class="metric-label">Page Hits</span><span class="metric-value metric-hits">${hits}</span></div>
+        <div class="metric"><span class="metric-label">Hit Rate</span><span class="metric-value metric-rate">${hr}%</span></div>
+        <div class="metric"><span class="metric-label">Fault Rate</span><span class="metric-value">${fr}%</span></div>
+        <div class="hit-bar-wrap">
+          <div class="hit-bar-bg"><div class="hit-bar-fill bar-${key}" style="width:0%" data-target="${hr}"></div></div>
+        </div>
+      </div>
+    `;
+  }
+  // Animate bars
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.hit-bar-fill').forEach(el => {
+      el.style.width = el.dataset.target + '%';
+    });
+  });
+
+  // TRACE TABS
+  const tabs = document.getElementById('traceTabs');
+  const contents = document.getElementById('traceContents');
+  tabs.innerHTML = ''; contents.innerHTML = '';
+
+  ALGOS.forEach(({ name, key }, i) => {
+    const tab = document.createElement('button');
+    tab.className = 'trace-tab' + (i === 0 ? ` active-${key}` : '');
+    tab.textContent = name;
+    tab.dataset.key = key;
+    tab.onclick = () => switchTab(key);
+    tabs.appendChild(tab);
+
+    const div = document.createElement('div');
+    div.className = 'trace-content' + (i === 0 ? ' active' : '');
+    div.id = `trace-${key}`;
+    div.innerHTML = buildTraceTable(results[name].steps, cap);
+    contents.appendChild(div);
+  });
+
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function switchTab(activeKey) {
+  document.querySelectorAll('.trace-tab').forEach(t => {
+    t.className = 'trace-tab' + (t.dataset.key === activeKey ? ` active-${activeKey}` : '');
+  });
+  document.querySelectorAll('.trace-content').forEach(c => {
+    c.classList.toggle('active', c.id === `trace-${activeKey}`);
+  });
+}
+
+function buildTraceTable(steps, cap) {
+  let rows = steps.map(({ page, frame, hit }, i) => {
+    const frames = [...frame];
+    while (frames.length < cap) frames.push(null);
+    const frameHTML = frames.map(f =>
+      f !== null
+        ? `<div class="frame-slot">${f}</div>`
+        : `<div class="frame-slot empty">—</div>`
+    ).join('');
+    return `<tr>
+      <td>${i + 1}</td>
+      <td class="page-cell">${page}</td>
+      <td><div class="frame-cell">${frameHTML}</div></td>
+      <td class="${hit ? 'hit-cell' : 'miss-cell'}">${hit ? 'HIT ✓' : 'MISS ✗'}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="scroll-wrap"><table class="trace-table">
+    <thead><tr><th>#</th><th>Page</th><th>Frames</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+</script>
+</body>
+</html>
